@@ -16,7 +16,20 @@ const taskSchema = new mongoose.Schema({
   assignedAgent: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Agent',
+  },
+  assignedSubAgent: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'SubAgent',
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    refPath: 'createdByModel',
     required: true,
+  },
+  createdByModel: {
+    type: String,
+    required: true,
+    enum: ['User', 'Agent'],
   },
   status: {
     type: String,

@@ -1,93 +1,52 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Agent = require('../models/Agent');
+const SubAgent = require('../models/SubAgent');
 const router = express.Router();
 
-// Register admin (for initial setup)
-router.post('/register', async (req, res) => {
-  console.log('=== REGISTER ROUTE START ===');
-  console.log('Request body:', req.body);
-  
-  try {
-    const { email, password } = req.body;
-    console.log('Extracted email:', email);
-    console.log('Extracted password:', password ? 'PROVIDED' : 'MISSING');
-
-    if (!email || !password) {
-      console.log('Missing email or password');
-      return res.status(400).json({ message: 'Email and password required' });
-    }
-
-    console.log('Checking for existing user...');
-    const existingUser = await User.findOne({ email });
-    console.log('Existing user found:', !!existingUser);
-    
-    if (existingUser) {
-      console.log('User already exists, returning 400');
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
-    console.log('Creating new user object...');
-    const user = new User({
-      email,
-      password,
-      role: 'admin',
-    });
-    console.log('User object created');
-
-    console.log('Attempting to save user...');
-    await user.save();
-    console.log('User saved successfully!');
-
-    console.log('Creating JWT token...');
-    const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '24h' }
-    );
-    console.log('Token created');
-
-    console.log('Sending success response...');
-    res.status(201).json({
-      token,
-      user: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-      },
-    });
-    console.log('=== REGISTER ROUTE SUCCESS ===');
-
-  } catch (error) {
-    console.error('=== REGISTER ROUTE ERROR ===');
-    console.error('Error details:', error);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-// Login route
+// Login route - handles admin, agent, and sub-agent login
+// Add role-based login restrictions
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, role } = req.body; // Add role to login request
 
-    // Check if user exists
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid credentials' });
+    // Validate that role is provided
+    if (!role) {
+      return res.status(400).json({ message: 'Role is required' });
     }
 
-    // Check password
+    let user = null;
+    let userType = null;
+
+    // Check based on requested role
+    if (role === 'admin') {
+      user = await User.findOne({ email });
+      if (user) userType = 'admin';
+    } else if (role === 'agent') {
+      user = await Agent.findOne({ email });
+      if (user) userType = 'agent';
+    } else if (role === 'sub-agent') {
+      user = await SubAgent.findOne({ email }).populate('parentAgent');
+      if (user) userType = 'sub-agent';
+    } else {
+      return res.status(400).json({ message: 'Invalid role specified' });
+    }
+
+    // Ensure user exists and role matches
+    if (!user || userType !== role) {
+      return res.status(400).json({ message: 'Invalid credentials or unauthorized role access' });
+    }
+
+    // Rest of your login logic...
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // Create JWT token
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'fallback-secret',
+      { id: user._id, email: user.email, role: userType },
+      process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -96,7 +55,8 @@ router.post('/login', async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        role: user.role,
+        name: user.name,
+        role: userType,
       },
     });
   } catch (error) {
@@ -104,5 +64,6 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 module.exports = router;

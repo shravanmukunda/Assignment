@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const agentSchema = new mongoose.Schema({
+const subAgentSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
@@ -20,20 +20,25 @@ const agentSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  parentAgent: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Agent',
+    required: true,
+  },
 }, {
   timestamps: true,
 });
 
 // Hash password before saving
-agentSchema.pre('save', async function(next) {
+subAgentSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
 
-
-agentSchema.methods.comparePassword = async function(candidatePassword) {
+// Compare password method
+subAgentSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model('Agent', agentSchema);
+module.exports = mongoose.model('SubAgent', subAgentSchema);
